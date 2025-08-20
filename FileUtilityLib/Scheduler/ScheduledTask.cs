@@ -5,7 +5,7 @@ namespace FileUtilityLib.Scheduler
     public class ScheduledTask
     {
         public string Name { get; set; } = string.Empty;
-        public IFileTask TaskAction { get; set; }
+        public required IFileTask TaskAction { get; set; }
         public List<TimeSpan> ExecutionTimes { get; set; } = new();
         public List<DayOfWeek> ExcludedDays { get; set; } = new();
         public CancellationTokenSource Cancellation { get; private set; } = new();
