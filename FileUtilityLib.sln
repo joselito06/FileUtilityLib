@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileUtilityLib", "FileUtili
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileUtilityApp_Test", "FileUtilityApp_Test\FileUtilityApp_Test.csproj", "{A771FCD3-F531-4862-9980-3E917B57DCF8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileSchedulerLib", "FileSchedulerLib\FileSchedulerLib.csproj", "{74AFDA1B-36DF-4C67-BD3D-F282EA310DE1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{A771FCD3-F531-4862-9980-3E917B57DCF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A771FCD3-F531-4862-9980-3E917B57DCF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A771FCD3-F531-4862-9980-3E917B57DCF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74AFDA1B-36DF-4C67-BD3D-F282EA310DE1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74AFDA1B-36DF-4C67-BD3D-F282EA310DE1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74AFDA1B-36DF-4C67-BD3D-F282EA310DE1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74AFDA1B-36DF-4C67-BD3D-F282EA310DE1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

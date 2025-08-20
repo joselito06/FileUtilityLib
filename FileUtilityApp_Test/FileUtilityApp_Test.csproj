@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FileSchedulerLib\FileSchedulerLib.csproj" />
     <ProjectReference Include="..\FileUtilityLib\FileUtilityLib.csproj" />
   </ItemGroup>
 
