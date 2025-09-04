@@ -3,8 +3,11 @@ namespace FileUtilityLib.Models
 {
     public class FileOperationResult
     {
+        public string FilePath { get; set; } = string.Empty;
+        public string DestinationPath { get; set; } = string.Empty;
         public bool Success { get; set; }
-        public List<string> CopiedFiles { get; set; } = new();
-        public List<string> Errors { get; set; } = new();
+        public string? ErrorMessage { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.Now;
+        public long FileSizeBytes { get; set; }
     }
 }
