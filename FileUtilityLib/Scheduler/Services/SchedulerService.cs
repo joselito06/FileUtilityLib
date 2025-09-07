@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Quartz;
 using Quartz.Impl;
 using FileUtilityLib.Scheduler.Jobs;
+using System.Collections.Specialized;
 
 namespace FileUtilityLib.Scheduler.Services
 {
@@ -49,8 +50,18 @@ namespace FileUtilityLib.Scheduler.Services
                 // Cargar configuraciones
                 await _scheduleManager.LoadSchedulesAsync();
 
+                // Crear scheduler con configuración específica
+                var properties = new NameValueCollection
+                {
+                    ["quartz.scheduler.instanceName"] = "FileUtilityScheduler",
+                    ["quartz.scheduler.instanceId"] = "AUTO",
+                    ["quartz.threadPool.type"] = "Quartz.Simpl.SimpleThreadPool, Quartz",
+                    ["quartz.threadPool.threadCount"] = "3",
+                    ["quartz.jobStore.type"] = "Quartz.Simpl.RAMJobStore, Quartz"
+                };
+
                 // Crear scheduler
-                var factory = new StdSchedulerFactory();
+                var factory = new StdSchedulerFactory(properties);
                 _scheduler = await factory.GetScheduler();
 
                 // Configurar el contexto del job
@@ -86,7 +97,10 @@ namespace FileUtilityLib.Scheduler.Services
         {
             if (_scheduler == null || !IsRunning)
             {
-                throw new InvalidOperationException("El programador no está ejecutándose");
+                _logger.LogWarning("Scheduler no está ejecutándose. Guardando configuración para inicio posterior.");
+                _scheduleManager.AddOrUpdateSchedule(schedule);
+                await _scheduleManager.SaveSchedulesAsync();
+                return;
             }
 
             var task = _taskManager.GetTask(taskId);
@@ -105,9 +119,10 @@ namespace FileUtilityLib.Scheduler.Services
                 var job = JobBuilder.Create<FileCopyJob>()
                     .WithIdentity(jobKey)
                     .UsingJobData("TaskId", taskId)
+                    .UsingJobData("TaskName", task.Name)
                     .Build();
 
-                // Crear triggers según el tipo de programación
+                /*// Crear triggers según el tipo de programación
                 var triggers = CreateTriggersForSchedule(taskId, schedule);
 
                 if (triggers.Any())
@@ -127,6 +142,34 @@ namespace FileUtilityLib.Scheduler.Services
                         TaskScheduled?.Invoke(this, new TaskScheduleEventArgs(
                             taskId, task.Name, nextExecution.Value, DateTime.Now));
                     }
+                }*/
+
+                // Crear trigger según el tipo
+                ITrigger trigger = schedule.Type switch
+                {
+                    ScheduleType.Interval => CreateSimpleIntervalTrigger(taskId, schedule),
+                    ScheduleType.Daily => CreateDailyTrigger(taskId, schedule),
+                    ScheduleType.Weekly => CreateWeeklyTrigger(taskId, schedule),
+                    _ => CreateSimpleIntervalTrigger(taskId, schedule)
+                };
+
+                // Programar job y trigger
+                await _scheduler.ScheduleJob(job, trigger);
+
+                // Guardar configuración
+                _scheduleManager.AddOrUpdateSchedule(schedule);
+                await _scheduleManager.SaveSchedulesAsync();
+
+                // Log de confirmación
+                var nextFireTime = trigger.GetNextFireTimeUtc();
+                _logger.LogInformation("Tarea programada: {TaskId} - Próxima ejecución: {NextTime}",
+                    taskId, nextFireTime?.ToString("yyyy-MM-dd HH:mm:ss"));
+
+                // Notificar
+                if (nextFireTime.HasValue)
+                {
+                    TaskScheduled?.Invoke(this, new TaskScheduleEventArgs(
+                        taskId, task.Name, nextFireTime.Value.DateTime, DateTime.Now));
                 }
             }
             catch (Exception ex)
@@ -136,6 +179,62 @@ namespace FileUtilityLib.Scheduler.Services
             }
         }
 
+        private ITrigger CreateSimpleIntervalTrigger(string taskId, ScheduleConfiguration schedule)
+        {
+            var triggerBuilder = TriggerBuilder.Create()
+                .WithIdentity($"IntervalTrigger_{taskId}", "FileCopy")
+                .StartNow()  // Iniciar inmediatamente
+                .WithSimpleSchedule(x => x
+                    .WithIntervalInMinutes(schedule.IntervalMinutes)
+                    .RepeatForever());
+
+            return triggerBuilder.Build();
+        }
+
+        private ITrigger CreateDailyTrigger(string taskId, ScheduleConfiguration schedule)
+        {
+            if (!schedule.ExecutionTimes.Any())
+            {
+                schedule.ExecutionTimes.Add(new TimeSpan(8, 0, 0)); // Default 8 AM
+            }
+
+            var time = schedule.ExecutionTimes.First();
+
+            var triggerBuilder = TriggerBuilder.Create()
+                .WithIdentity($"DailyTrigger_{taskId}", "FileCopy")
+                .StartNow()
+                .WithDailyTimeIntervalSchedule(x => x
+                    .OnEveryDay()
+                    .StartingDailyAt(TimeOfDay.HourAndMinuteOfDay(time.Hours, time.Minutes)));
+
+            return triggerBuilder.Build();
+        }
+
+        private ITrigger CreateWeeklyTrigger(string taskId, ScheduleConfiguration schedule)
+        {
+            if (!schedule.DaysOfWeek.Any())
+            {
+                schedule.DaysOfWeek.Add(DayOfWeek.Monday); // Default
+            }
+
+            if (!schedule.ExecutionTimes.Any())
+            {
+                schedule.ExecutionTimes.Add(new TimeSpan(8, 0, 0)); // Default 8 AM
+            }
+
+            var dayOfWeek = schedule.DaysOfWeek.First();
+            var time = schedule.ExecutionTimes.First();
+
+            var triggerBuilder = TriggerBuilder.Create()
+                .WithIdentity($"WeeklyTrigger_{taskId}", "FileCopy")
+                .StartNow()
+                .WithSchedule(CronScheduleBuilder
+                    .WeeklyOnDayAndHourAndMinute(dayOfWeek, time.Hours, time.Minutes));
+
+            return triggerBuilder.Build();
+        }
+
+
         public async Task UnscheduleTaskAsync(string taskId)
         {
             if (_scheduler == null) return;
@@ -143,12 +242,15 @@ namespace FileUtilityLib.Scheduler.Services
             try
             {
                 var jobKey = new JobKey($"CopyJob_{taskId}", "FileCopy");
-                await _scheduler.DeleteJob(jobKey);
+                var deleted = await _scheduler.DeleteJob(jobKey);
 
-                _scheduleManager.RemoveSchedule(taskId);
-                await _scheduleManager.SaveSchedulesAsync();
+                if (deleted)
+                {
+                    _scheduleManager.RemoveSchedule(taskId);
+                    await _scheduleManager.SaveSchedulesAsync();
 
-                _logger.LogInformation("Tarea desprogramada: {TaskId}", taskId);
+                    _logger.LogInformation("Tarea desprogramada: {TaskId}", taskId);
+                }
             }
             catch (Exception ex)
             {
@@ -182,8 +284,30 @@ namespace FileUtilityLib.Scheduler.Services
 
         public async Task<DateTime?> GetNextExecutionTime(string taskId)
         {
-            var times = await GetNextExecutionTimesAsync(taskId, 1);
-            return times.FirstOrDefault();
+            //var times = await GetNextExecutionTimesAsync(taskId, 1);
+            //return times.FirstOrDefault();
+
+            if (_scheduler == null || !IsRunning)
+                return null;
+
+            try
+            {
+                var jobKey = new JobKey($"CopyJob_{taskId}", "FileCopy");
+                var triggers = await _scheduler.GetTriggersOfJob(jobKey);
+
+                var nextTime = triggers
+                    .Select(t => t.GetNextFireTimeUtc())
+                    .Where(t => t.HasValue)
+                    .OrderBy(t => t.Value)
+                    .FirstOrDefault();
+
+                return nextTime?.DateTime;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error obteniendo próxima ejecución para tarea: {TaskId}", taskId);
+                return null;
+            }
         }
 
         public List<DateTime> GetNextExecutionTimes(string taskId, int count = 5)
@@ -224,6 +348,7 @@ namespace FileUtilityLib.Scheduler.Services
         private async Task ScheduleExistingTasks()
         {
             var schedules = _scheduleManager.GetEnabledSchedules();
+            _logger.LogInformation("Programando {Count} tareas existentes", schedules.Count);
 
             foreach (var schedule in schedules)
             {
@@ -233,6 +358,7 @@ namespace FileUtilityLib.Scheduler.Services
                     try
                     {
                         await ScheduleTaskAsync(schedule.TaskId, schedule);
+                        _logger.LogInformation("Tarea programada: {TaskName}", task.Name);
                     }
                     catch (Exception ex)
                     {
@@ -360,7 +486,13 @@ namespace FileUtilityLib.Scheduler.Services
 
         internal void OnTaskExecuting(string taskId, string taskName, DateTime scheduledTime)
         {
+            _logger.LogInformation("Ejecutando tarea programada: {TaskName} (ID: {TaskId})", taskName, taskId);
             TaskExecuting?.Invoke(this, new TaskScheduleEventArgs(taskId, taskName, scheduledTime, DateTime.Now));
+        }
+
+        public void Dispose()
+        {
+
         }
     }
 }

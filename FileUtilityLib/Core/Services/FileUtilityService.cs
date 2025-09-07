@@ -1,16 +1,22 @@
 ﻿using FileUtilityLib.Core.Interfaces;
-using FileUtilityLib.Core.Services;
 using FileUtilityLib.Models.Events;
 using FileUtilityLib.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-namespace FileUtilityLib.Scheduler.Services
+namespace FileUtilityLib.Core.Services
 {
     public class FileUtilityService : IFileUtilityService
     {
         private readonly IServiceScope _serviceScope;
         private readonly ILogger<FileUtilityService> _logger;
+        private readonly List<PendingSchedule> _pendingSchedules; // ✅ NUEVA: Cola de schedules pendientes
+        private readonly ScheduleManager _directScheduleManager;
         private bool _disposed;
 
         public IFileCopyService FileCopyService { get; }
@@ -33,6 +39,8 @@ namespace FileUtilityLib.Scheduler.Services
             var services = _serviceScope.ServiceProvider;
 
             _logger = services.GetRequiredService<ILogger<FileUtilityService>>();
+            _pendingSchedules = new List<PendingSchedule>(); // ✅ INICIALIZAR
+            _directScheduleManager = new ScheduleManager(configDirectory);
 
             // Crear instancias de servicios
             TaskManager = new TaskManager(
@@ -43,8 +51,9 @@ namespace FileUtilityLib.Scheduler.Services
                 services.GetRequiredService<ILogger<FileCopyService>>(),
                 TaskManager);
 
-            SchedulerService = new SchedulerService(
-                services.GetRequiredService<ILogger<SchedulerService>>(),
+            // USAR NUESTRO SCHEDULER PERSONALIZADO
+            SchedulerService = new CustomSchedulerService(
+                services.GetRequiredService<ILogger<CustomSchedulerService>>(),
                 FileCopyService,
                 TaskManager,
                 configDirectory);
@@ -66,28 +75,54 @@ namespace FileUtilityLib.Scheduler.Services
             SchedulerService.TaskExecuting += (sender, e) => TaskExecuting?.Invoke(this, e);
         }
 
+        // Resto de métodos igual que antes...
         public async Task<string> CreateTaskAsync(FileCopyTask task, ScheduleConfiguration? schedule = null)
         {
             try
             {
+                _logger.LogInformation("📝 Creando tarea: {TaskName}", task.Name);
+
                 var taskId = TaskManager.AddTask(task);
                 await TaskManager.SaveTasksAsync();
 
+                _logger.LogInformation("💾 Tarea guardada con ID: {TaskId}", taskId);
+
                 if (schedule != null)
                 {
-                    schedule.TaskId = taskId;
+                    _logger.LogInformation("⏰ Programando tarea...");
+
+                    schedule.TaskId = taskId;  // CRÍTICO: Asegurar que tenga el TaskId
+
+                    // Si el scheduler ya está corriendo, programar inmediatamente
                     if (IsSchedulerRunning)
                     {
                         await SchedulerService.ScheduleTaskAsync(taskId, schedule);
+                        _logger.LogInformation("✅ Tarea programada mientras scheduler está activo");
+                    }
+                    else
+                    {
+                        // ✅ SOLUCIÓN: Guardar en cola pendiente Y en archivo
+                        _pendingSchedules.Add(new PendingSchedule { TaskId = taskId, Schedule = schedule });
+
+                        // ✅ CRÍTICO: Guardar schedule aunque el scheduler no esté activo
+                        //var scheduleManager = new ScheduleManager(_logger.LoggerFactory?.CreateLogger<ScheduleManager>() ??
+                        //   Microsoft.Extensions.Logging.Abstractions.NullLogger<ScheduleManager>.Instance);
+
+                        await _directScheduleManager.LoadSchedulesAsync();
+                        _directScheduleManager.AddOrUpdateSchedule(schedule);
+                        await _directScheduleManager.SaveSchedulesAsync();
+
+                        _logger.LogInformation("💾 Schedule guardado para programación posterior");
+                        _logger.LogInformation($"📋 Schedules pendientes: {_pendingSchedules.Count}");
                     }
                 }
 
-                _logger.LogInformation("Tarea creada exitosamente: {TaskName} (ID: {TaskId})", task.Name, taskId);
+                _logger.LogInformation("✅ Tarea creada exitosamente: {TaskName} (ID: {TaskId})", task.Name, taskId);
                 return taskId;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creando tarea: {TaskName}", task.Name);
+                _logger.LogError(ex, "❌ Error creando tarea: {TaskName}", task.Name);
                 throw;
             }
         }
@@ -135,6 +170,9 @@ namespace FileUtilityLib.Scheduler.Services
                     await SchedulerService.UnscheduleTaskAsync(taskId);
                 }
 
+                // Remover de schedules pendientes si existe
+                _pendingSchedules.RemoveAll(p => p.TaskId == taskId);
+
                 var removed = TaskManager.RemoveTask(taskId);
                 if (removed)
                 {
@@ -168,13 +206,36 @@ namespace FileUtilityLib.Scheduler.Services
         {
             try
             {
+                _logger.LogInformation("🚀 Iniciando programador de tareas...");
+
+                // PASO 1: Cargar tareas ANTES de iniciar scheduler
                 await TaskManager.LoadTasksAsync();
+                _logger.LogInformation("📋 Tareas cargadas desde archivo");
+
+                // PASO 2: Procesar schedules pendientes
+                if (_pendingSchedules.Count > 0)
+                {
+                    _logger.LogInformation($"📋 Procesando {_pendingSchedules.Count} schedules pendientes...");
+
+                    // Los schedules pendientes ya están guardados en archivo, 
+                    // pero asegurémonos de que se programen
+                    foreach (var pending in _pendingSchedules)
+                    {
+                        _logger.LogInformation($"📅 Preparando schedule pendiente para tarea: {pending.TaskId}");
+                    }
+                }
+
+                // PASO 3: Iniciar el scheduler (que cargará y programará las tareas)
                 await SchedulerService.StartAsync();
-                _logger.LogInformation("Programador de tareas iniciado exitosamente");
+
+                // PASO 4: Limpiar schedules pendientes ya que se procesaron
+                _pendingSchedules.Clear();
+
+                _logger.LogInformation("✅ Programador de tareas iniciado exitosamente");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error iniciando el programador de tareas");
+                _logger.LogError(ex, "❌ Error iniciando el programador de tareas");
                 throw;
             }
         }
@@ -207,14 +268,7 @@ namespace FileUtilityLib.Scheduler.Services
         {
             try
             {
-                var nextTime = await SchedulerService.GetNextExecutionTime(taskId);
-                if (nextTime.HasValue)
-                {
-                    return new List<DateTime> { nextTime.Value };
-                }
-
-                // Fallback a cálculo manual si el scheduler no está activo
-                return SchedulerService.GetNextExecutionTimes(taskId, count);
+                return await Task.FromResult(SchedulerService.GetNextExecutionTimes(taskId, count));
             }
             catch (Exception ex)
             {
@@ -257,10 +311,7 @@ namespace FileUtilityLib.Scheduler.Services
             {
                 try
                 {
-                    if (IsSchedulerRunning)
-                    {
-                        SchedulerService.StopAsync().GetAwaiter().GetResult();
-                    }
+                    SchedulerService?.Dispose();
                 }
                 catch (Exception ex)
                 {
@@ -271,5 +322,13 @@ namespace FileUtilityLib.Scheduler.Services
                 _disposed = true;
             }
         }
+
+        // ✅ NUEVA: Clase auxiliar para schedules pendientes
+        private class PendingSchedule
+        {
+            public string TaskId { get; set; } = string.Empty;
+            public ScheduleConfiguration Schedule { get; set; } = new();
+        }
     }
+
 }

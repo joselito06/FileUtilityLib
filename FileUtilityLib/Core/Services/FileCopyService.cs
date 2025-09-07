@@ -95,6 +95,23 @@ namespace FileUtilityLib.Core.Services
                         {
                             FileProcessing?.Invoke(this, new FileOperationEventArgs(fileResult));
 
+                            // ✅ NUEVO: Verificar si debe copiarse (duplicados)
+                            var shouldCopy = ShouldCopyFile(sourceFile, destFile, task);
+
+                            if (!shouldCopy.ShouldCopy)
+                            {
+                                _logger.LogDebug("⏭️ Saltando archivo (duplicado): {FileName} - {Reason}", fileName, shouldCopy.Reason);
+                                fileResult.Success = true; // Consideramos exitoso el saltar duplicados
+                                result.SuccessfulFiles++;
+                                result.FileResults.Add(fileResult);
+                                FileProcessed?.Invoke(this, new FileOperationEventArgs(fileResult));
+                                continue;
+                            }
+
+                            // Determinar archivo final de destino (puede renombrarse)
+                            var finalDestFile = shouldCopy.FinalDestinationPath ?? destFile;
+                            fileResult.DestinationPath = finalDestFile;
+
                             await CopyFileAsync(sourceFile, destFile, cancellationToken);
 
                             fileResult.Success = true;
@@ -188,19 +205,41 @@ namespace FileUtilityLib.Core.Services
 
             try
             {
-                // Obtener archivos según los patrones
-                foreach (var pattern in task.FilePatterns)
+                // ✅ NUEVO: Prioridad a archivos específicos
+                if (task.SpecificFiles.Count > 0)
                 {
-                    var patternFiles = Directory.GetFiles(task.SourcePath, pattern, SearchOption.TopDirectoryOnly);
-                    files.AddRange(patternFiles);
-                }
+                    _logger.LogInformation("🎯 Buscando {Count} archivos específicos", task.SpecificFiles.Count);
 
-                // Si no hay patrones específicos, obtener todos los archivos
-                if (task.FilePatterns.Count == 0)
+                    foreach (var fileName in task.SpecificFiles)
+                    {
+                        var filePath = Path.Combine(task.SourcePath, fileName);
+                        if (File.Exists(filePath))
+                        {
+                            files.Add(filePath);
+                            _logger.LogDebug("✓ Encontrado archivo específico: {FileName}", fileName);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ Archivo específico no encontrado: {FileName}", fileName);
+                        }
+                    }
+                }
+                else
                 {
-                    files.AddRange(Directory.GetFiles(task.SourcePath, "*.*", SearchOption.TopDirectoryOnly));
-                }
+                    // Obtener archivos según los patrones
+                    foreach (var pattern in task.FilePatterns)
+                    {
+                        var patternFiles = Directory.GetFiles(task.SourcePath, pattern, SearchOption.TopDirectoryOnly);
+                        files.AddRange(patternFiles);
+                    }
 
+                    // Si no hay patrones específicos, obtener todos los archivos
+                    if (task.FilePatterns.Count == 0)
+                    {
+                        files.AddRange(Directory.GetFiles(task.SourcePath, "*.*", SearchOption.TopDirectoryOnly));
+                    }
+                }
+                
                 // Eliminar duplicados
                 files = files.Distinct().ToList();
 
@@ -289,6 +328,131 @@ namespace FileUtilityLib.Core.Services
             using var destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize, FileOptions.SequentialScan);
 
             await sourceStream.CopyToAsync(destinationStream, bufferSize, cancellationToken);
+        }
+
+        // ✅ NUEVO: Comparar si dos archivos son iguales
+        private bool AreFilesEqual(FileInfo sourceInfo, FileInfo destInfo, DuplicateComparison comparison)
+        {
+            switch (comparison)
+            {
+                case DuplicateComparison.SizeAndDate:
+                    return sourceInfo.Length == destInfo.Length &&
+                           sourceInfo.LastWriteTime == destInfo.LastWriteTime;
+
+                case DuplicateComparison.SizeOnly:
+                    return sourceInfo.Length == destInfo.Length;
+
+                case DuplicateComparison.DateOnly:
+                    return sourceInfo.LastWriteTime == destInfo.LastWriteTime;
+
+                case DuplicateComparison.HashContent:
+                    return AreFilesEqualByHash(sourceInfo.FullName, destInfo.FullName);
+
+                default:
+                    return sourceInfo.Length == destInfo.Length &&
+                           sourceInfo.LastWriteTime == destInfo.LastWriteTime;
+            }
+        }
+
+        // ✅ NUEVO: Comparar archivos por hash SHA-256
+        private bool AreFilesEqualByHash(string file1, string file2)
+        {
+            try
+            {
+                using var sha256 = System.Security.Cryptography.SHA256.Create();
+
+                byte[] hash1, hash2;
+
+                using (var stream1 = File.OpenRead(file1))
+                {
+                    hash1 = sha256.ComputeHash(stream1);
+                }
+
+                using (var stream2 = File.OpenRead(file2))
+                {
+                    hash2 = sha256.ComputeHash(stream2);
+                }
+
+                return hash1.SequenceEqual(hash2);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error comparando archivos por hash: {File1} vs {File2}", file1, file2);
+                // Fallback a comparación por tamaño y fecha
+                var info1 = new FileInfo(file1);
+                var info2 = new FileInfo(file2);
+                return info1.Length == info2.Length && info1.LastWriteTime == info2.LastWriteTime;
+            }
+        }
+
+        // ✅ NUEVO: Generar nombre único para archivo
+        private string GenerateUniqueFileName(string originalPath)
+        {
+            var directory = Path.GetDirectoryName(originalPath) ?? string.Empty;
+            var nameWithoutExt = Path.GetFileNameWithoutExtension(originalPath);
+            var extension = Path.GetExtension(originalPath);
+
+            var counter = 1;
+            string newPath;
+
+            do
+            {
+                var newName = $"{nameWithoutExt}_({counter}){extension}";
+                newPath = Path.Combine(directory, newName);
+                counter++;
+            }
+            while (File.Exists(newPath) && counter < 1000); // Máximo 1000 intentos
+
+            return newPath;
+        }
+
+        // ✅ NUEVO: Verificar si un archivo debe copiarse
+        private (bool ShouldCopy, string? Reason, string? FinalDestinationPath) ShouldCopyFile(string sourceFile, string destFile, FileCopyTask task)
+        {
+            // Si el archivo no existe en destino, siempre copiar
+            if (!File.Exists(destFile))
+            {
+                return (true, "Archivo no existe en destino", destFile);
+            }
+
+            var sourceInfo = new FileInfo(sourceFile);
+            var destInfo = new FileInfo(destFile);
+
+            // Según el comportamiento configurado
+            switch (task.DuplicateHandling)
+            {
+                case DuplicateHandling.Overwrite:
+                    return (true, "Sobrescribir siempre", destFile);
+
+                case DuplicateHandling.Skip:
+                    if (AreFilesEqual(sourceInfo, destInfo, task.DuplicateComparison))
+                    {
+                        return (false, $"Archivo idéntico (comparación: {task.DuplicateComparison})", null);
+                    }
+                    return (true, "Archivos diferentes", destFile);
+
+                case DuplicateHandling.OverwriteIfNewer:
+                    if (sourceInfo.LastWriteTime > destInfo.LastWriteTime)
+                    {
+                        return (true, "Archivo origen más nuevo", destFile);
+                    }
+                    return (false, "Archivo destino igual o más nuevo", null);
+
+                case DuplicateHandling.RenameNew:
+                    if (AreFilesEqual(sourceInfo, destInfo, task.DuplicateComparison))
+                    {
+                        return (false, "Archivo idéntico, no renombrar", null);
+                    }
+                    else
+                    {
+                        // Generar nombre único
+                        var newName = GenerateUniqueFileName(destFile);
+                        return (true, "Renombrar archivo", newName);
+                    }
+
+                default:
+                    return (true, "Comportamiento por defecto", destFile);
+            }
         }
     }
 }

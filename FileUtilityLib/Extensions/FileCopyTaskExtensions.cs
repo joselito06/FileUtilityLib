@@ -33,6 +33,80 @@ namespace FileUtilityLib.Extensions
             return task;
         }
 
+        // ✅ NUEVO: Métodos para archivos específicos
+        public static FileCopyTask AddSpecificFile(this FileCopyTask task, string fileName)
+        {
+            task.SpecificFiles.Add(fileName);
+            return task;
+        }
+
+        public static FileCopyTask AddSpecificFiles(this FileCopyTask task, params string[] fileNames)
+        {
+            task.SpecificFiles.AddRange(fileNames);
+            return task;
+        }
+
+        public static FileCopyTask ClearSpecificFiles(this FileCopyTask task)
+        {
+            task.SpecificFiles.Clear();
+            return task;
+        }
+
+        // ✅ NUEVO: Métodos para manejo de duplicados
+        public static FileCopyTask SkipDuplicates(this FileCopyTask task)
+        {
+            task.DuplicateHandling = DuplicateHandling.Skip;
+            return task;
+        }
+
+        public static FileCopyTask OverwriteAlways(this FileCopyTask task)
+        {
+            task.DuplicateHandling = DuplicateHandling.Overwrite;
+            return task;
+        }
+
+        public static FileCopyTask OverwriteIfNewer(this FileCopyTask task)
+        {
+            task.DuplicateHandling = DuplicateHandling.OverwriteIfNewer;
+            return task;
+        }
+
+        public static FileCopyTask RenameIfExists(this FileCopyTask task)
+        {
+            task.DuplicateHandling = DuplicateHandling.RenameNew;
+            return task;
+        }
+
+        public static FileCopyTask CompareBy(this FileCopyTask task, DuplicateComparison comparison)
+        {
+            task.DuplicateComparison = comparison;
+            return task;
+        }
+
+        public static FileCopyTask CompareBySizeAndDate(this FileCopyTask task)
+        {
+            task.DuplicateComparison = DuplicateComparison.SizeAndDate;
+            return task;
+        }
+
+        public static FileCopyTask CompareBySizeOnly(this FileCopyTask task)
+        {
+            task.DuplicateComparison = DuplicateComparison.SizeOnly;
+            return task;
+        }
+
+        public static FileCopyTask CompareByDateOnly(this FileCopyTask task)
+        {
+            task.DuplicateComparison = DuplicateComparison.DateOnly;
+            return task;
+        }
+
+        public static FileCopyTask CompareByContent(this FileCopyTask task)
+        {
+            task.DuplicateComparison = DuplicateComparison.HashContent;
+            return task;
+        }
+
         public static FileCopyTask AddCondition(this FileCopyTask task, ConditionType type, object? value = null)
         {
             task.Conditions.Add(new FileCopyCondition { Type = type, Value = value });

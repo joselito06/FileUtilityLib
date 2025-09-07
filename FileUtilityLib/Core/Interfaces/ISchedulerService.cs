@@ -3,7 +3,7 @@ using FileUtilityLib.Models;
 
 namespace FileUtilityLib.Core.Interfaces
 {
-    public interface ISchedulerService
+    public interface ISchedulerService : IDisposable
     {
         event EventHandler<TaskScheduleEventArgs>? TaskScheduled;
         event EventHandler<TaskScheduleEventArgs>? TaskExecuting;

@@ -17,9 +17,9 @@ namespace FileUtilityLib.Core.Services
         private readonly Dictionary<string, ScheduleConfiguration> _schedules;
         private readonly string _configFilePath;
 
-        public ScheduleManager(ILogger logger, string? configDirectory = null)
+        public ScheduleManager(ILogger? logger = null, string? configDirectory = null)
         {
-            _logger = logger;
+            _logger = logger ?? NullLogger.Instance;
             _schedules = new Dictionary<string, ScheduleConfiguration>();
 
             var configDir = configDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FileUtilityLib");
@@ -29,8 +29,9 @@ namespace FileUtilityLib.Core.Services
 
         // ✅ CONSTRUCTOR NUEVO - SIN LOGGER ESPECÍFICO
         public ScheduleManager(string? configDirectory = null)
-            : this(NullLogger.Instance, configDirectory)
+            : this(null, configDirectory)
         {
+            
         }
 
         public void AddOrUpdateSchedule(ScheduleConfiguration schedule)

@@ -1,4 +1,5 @@
 ﻿
+using FileUtilityLib.Core.Services;
 using FileUtilityLib.Extensions;
 using FileUtilityLib.Models;
 using FileUtilityLib.Scheduler.Services;
@@ -7,302 +8,513 @@ internal class Program
 {
     static async Task Main(string[] args)
     {
-        Console.WriteLine("=== FileUtilityLib - Ejemplo Completo ===\n");
-
-        // 1. Crear el servicio principal
-        using var fileUtility = ServiceCollectionExtensions.CreateFileUtilityService(@"C:\FileUtilityConfig");
-
-        // 2. Configurar eventos para monitoreo
-        ConfigureEventHandlers(fileUtility);
+        Console.WriteLine("=== EJEMPLOS CON NUEVAS FUNCIONALIDADES ===\n");
 
         try
         {
-            // 3. Crear diferentes tipos de tareas
-            await CreateSampleTasks(fileUtility);
+            // Crear entorno de prueba mejorado
+            await SetupEnhancedTestEnvironment();
 
-            // 4. Iniciar el programador
-            Console.WriteLine("Iniciando programador de tareas...");
-            await fileUtility.StartSchedulerAsync();
+            using var fileUtility = ServiceCollectionExtensions.CreateFileUtilityService(@"C:\FileUtilityTest\Config");
 
-            // 5. Mostrar estado del sistema
-            await ShowSystemStatus(fileUtility);
+            // Configurar eventos
+            ConfigureEvents(fileUtility);
 
-            // 6. Ejecutar una tarea manualmente para demostración
-            await ExecuteTaskManually(fileUtility);
-
-            // 7. Mantener el programa ejecutándose
-            Console.WriteLine("\n=== Sistema Activo ===");
-            Console.WriteLine("Presiona 'q' para salir, 's' para ver estado, 'e' para ejecutar tarea...");
-
-            await InteractiveMode(fileUtility);
+            // Mostrar menú de ejemplos
+            await ShowExamplesMenu(fileUtility);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
         }
-        finally
-        {
-            await fileUtility.StopSchedulerAsync();
-            Console.WriteLine("Sistema detenido correctamente.");
-        }
-
     }
 
-    private static void ConfigureEventHandlers(FileUtilityService fileUtility)
+    private static async Task SetupEnhancedTestEnvironment()
     {
-        // Evento cuando inicia una operación
-        fileUtility.OperationStarted += (sender, e) =>
+        Console.WriteLine("🔧 Configurando entorno mejorado...\n");
+
+        var sourceDir = @"C:\FileUtilityTest\Source";
+        var destDir = @"C:\FileUtilityTest\Destination";
+
+        Directory.CreateDirectory(sourceDir);
+        Directory.CreateDirectory(destDir);
+        Directory.CreateDirectory(@"C:\FileUtilityTest\Config");
+
+        // Crear archivos específicos para las pruebas
+        var testFiles = new[]
         {
-            Console.WriteLine($"🚀 INICIANDO: {e.Result.TaskName} ({e.Result.StartTime:HH:mm:ss})");
+            // Archivos específicos que queremos copiar
+            new { Name = "Prueba1.xlsx", Content = "Contenido del archivo Prueba1", Size = 2000 },
+            new { Name = "Prueba2.xlsx", Content = "Contenido del archivo Prueba2", Size = 2500 },
+            new { Name = "ReporteVentas.pdf", Content = "Reporte de ventas del mes", Size = 5000 },
+            new { Name = "ConfiguracionSistema.json", Content = "{ \"setting\": \"value\" }", Size = 500 },
+            
+            // Otros archivos que NO queremos copiar
+            new { Name = "ArchivoNoDeseado1.xlsx", Content = "Este no debe copiarse", Size = 1000 },
+            new { Name = "ArchivoNoDeseado2.pdf", Content = "Este tampoco", Size = 1500 },
+            new { Name = "temporal.tmp", Content = "Archivo temporal", Size = 300 },
+            
+            // Archivos para pruebas de duplicados
+            new { Name = "Duplicado1.txt", Content = "Contenido para duplicar", Size = 800 },
+            new { Name = "Archivo_Grande.dat", Content = new string('A', 10000), Size = 10000 }
         };
 
-        // Evento cuando termina una operación
+        foreach (var file in testFiles)
+        {
+            var filePath = Path.Combine(sourceDir, file.Name);
+            var content = file.Content.Length > file.Size ?
+                         file.Content.Substring(0, file.Size) :
+                         file.Content.PadRight(file.Size, ' ');
+
+            await File.WriteAllTextAsync(filePath, content);
+
+            Console.WriteLine($"   📄 {file.Name} ({file.Size} bytes)");
+        }
+
+        // Crear algunos archivos en destino para probar duplicados
+        await CreateDuplicateTestFiles(destDir);
+
+        Console.WriteLine($"\n✅ Entorno mejorado creado:");
+        Console.WriteLine($"   📂 Origen: {sourceDir}");
+        Console.WriteLine($"   📂 Destino: {destDir}");
+        Console.WriteLine($"   📄 Archivos: {testFiles.Length} archivos");
+    }
+
+    private static async Task CreateDuplicateTestFiles(string destDir)
+    {
+        Console.WriteLine("\n🔄 Creando archivos para pruebas de duplicados...");
+
+        // Crear archivo idéntico
+        var duplicadoPath = Path.Combine(destDir, "Duplicado1.txt");
+        await File.WriteAllTextAsync(duplicadoPath, "Contenido para duplicar".PadRight(800, ' '));
+        File.SetLastWriteTime(duplicadoPath, DateTime.Now.AddMinutes(-5)); // Hace 5 minutos
+
+        // Crear archivo con mismo nombre pero diferente contenido
+        var diferentePath = Path.Combine(destDir, "Prueba1.xlsx");
+        await File.WriteAllTextAsync(diferentePath, "Contenido diferente".PadRight(1500, ' '));
+        File.SetLastWriteTime(diferentePath, DateTime.Now.AddHours(-1)); // Hace 1 hora
+
+        Console.WriteLine($"   📄 Duplicado1.txt (idéntico)");
+        Console.WriteLine($"   📄 Prueba1.xlsx (diferente contenido y fecha)");
+    }
+
+    private static async Task ShowExamplesMenu(FileUtilityService fileUtility)
+    {
+        while (true)
+        {
+            Console.WriteLine("\n🧪 EJEMPLOS CON NUEVAS FUNCIONALIDADES:");
+            Console.WriteLine("1️⃣  - Archivos específicos solamente");
+            Console.WriteLine("2️⃣  - Saltar duplicados (Skip)");
+            Console.WriteLine("3️⃣  - Sobrescribir si es más nuevo");
+            Console.WriteLine("4️⃣  - Renombrar archivos duplicados");
+            Console.WriteLine("5️⃣  - Comparación por contenido (hash)");
+            Console.WriteLine("6️⃣  - Combinación: específicos + condiciones");
+            Console.WriteLine("7️⃣  - Múltiples archivos específicos + múltiples destinos");
+            Console.WriteLine("8️⃣  - Prueba completa de duplicados");
+            Console.WriteLine("📊 - Ver archivos en origen y destino");
+            Console.WriteLine("🧹 - Limpiar destino");
+            Console.WriteLine("🚀 - Iniciar/Parar scheduler");
+            Console.WriteLine("❌ - Salir");
+
+            Console.Write("\n🎯 Selecciona un ejemplo: ");
+            var input = Console.ReadKey().KeyChar;
+            Console.WriteLine();
+
+            try
+            {
+                switch (input)
+                {
+                    case '1': await Example1_SpecificFiles(fileUtility); break;
+                    case '2': await Example2_SkipDuplicates(fileUtility); break;
+                    case '3': await Example3_OverwriteIfNewer(fileUtility); break;
+                    case '4': await Example4_RenameDuplicates(fileUtility); break;
+                    case '5': await Example5_CompareByHash(fileUtility); break;
+                    case '6': await Example6_SpecificWithConditions(fileUtility); break;
+                    case '7': await Example7_MultipleSpecificMultipleDestinations(fileUtility); break;
+                    case '8': await Example8_CompleteDuplicateTest(fileUtility); break;
+                    case 's':
+                    case 'S': await ShowFiles(); break;
+                    case 'c':
+                    case 'C': await CleanDestination(); break;
+                    case 'r':
+                    case 'R': await ToggleScheduler(fileUtility); break;
+                    case 'x':
+                    case 'X': return;
+                    default: Console.WriteLine("❓ Opción no válida"); break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error ejecutando ejemplo: {ex.Message}");
+            }
+        }
+    }
+
+    // EJEMPLO 1: Solo archivos específicos
+    private static async Task Example1_SpecificFiles(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 1: Solo archivos específicos");
+        Console.WriteLine("📋 Copiará ÚNICAMENTE: Prueba1.xlsx y Prueba2.xlsx");
+
+        var task = new FileCopyTask
+        {
+            Name = "Solo Archivos Específicos",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestination(@"C:\FileUtilityTest\Destination\Specific")
+        .AddSpecificFiles("Prueba1.xlsx", "Prueba2.xlsx")  // ✅ NUEVO
+        .SkipDuplicates()  // ✅ NUEVO
+        .Enable();
+
+        Directory.CreateDirectory(@"C:\FileUtilityTest\Destination\Specific");
+
+        var taskId = await fileUtility.CreateTaskAsync(task);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+
+        // Ejecutar inmediatamente para ver resultado
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Archivos: {result.SuccessfulFiles}/{result.TotalFiles}");
+    }
+
+    // EJEMPLO 2: Saltar duplicados
+    private static async Task Example2_SkipDuplicates(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 2: Saltar duplicados");
+        Console.WriteLine("📋 NO copiará archivos que ya existan con mismo tamaño y fecha");
+
+        var task = new FileCopyTask
+        {
+            Name = "Saltar Duplicados",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestination(@"C:\FileUtilityTest\Destination")
+        .AddFilePattern("*.txt")
+        .SkipDuplicates()  // ✅ NUEVO
+        .CompareBySizeAndDate()  // ✅ NUEVO
+        .Enable();
+
+        var taskId = await fileUtility.CreateTaskAsync(task);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Archivos: {result.SuccessfulFiles}/{result.TotalFiles}");
+
+        // Mostrar detalles de cada archivo
+        foreach (var fileResult in result.FileResults)
+        {
+            var fileName = Path.GetFileName(fileResult.FilePath);
+            var status = fileResult.Success ? "✓" : "✗";
+            Console.WriteLine($"   {status} {fileName}");
+        }
+    }
+
+    // EJEMPLO 3: Sobrescribir si es más nuevo
+    private static async Task Example3_OverwriteIfNewer(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 3: Sobrescribir si es más nuevo");
+        Console.WriteLine("📋 Solo copiará si el archivo origen es más reciente");
+
+        var task = new FileCopyTask
+        {
+            Name = "Sobrescribir Si Más Nuevo",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestination(@"C:\FileUtilityTest\Destination")
+        .AddSpecificFiles("Prueba1.xlsx", "Duplicado1.txt")
+        .OverwriteIfNewer()  // ✅ NUEVO
+        .Enable();
+
+        var taskId = await fileUtility.CreateTaskAsync(task);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Archivos: {result.SuccessfulFiles}/{result.TotalFiles}");
+    }
+
+    // EJEMPLO 4: Renombrar duplicados
+    private static async Task Example4_RenameDuplicates(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 4: Renombrar archivos duplicados");
+        Console.WriteLine("📋 Si existe, creará archivo con nombre único (ej: archivo_(1).txt)");
+
+        var task = new FileCopyTask
+        {
+            Name = "Renombrar Duplicados",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestination(@"C:\FileUtilityTest\Destination")
+        .AddSpecificFiles("Duplicado1.txt")
+        .RenameIfExists()  // ✅ NUEVO
+        .Enable();
+
+        var taskId = await fileUtility.CreateTaskAsync(task);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Archivos: {result.SuccessfulFiles}/{result.TotalFiles}");
+
+        // Mostrar archivos creados
+        foreach (var fileResult in result.FileResults)
+        {
+            if (fileResult.Success)
+            {
+                var finalName = Path.GetFileName(fileResult.DestinationPath);
+                Console.WriteLine($"   ✓ Creado: {finalName}");
+            }
+        }
+    }
+
+    // EJEMPLO 5: Comparación por hash de contenido
+    private static async Task Example5_CompareByHash(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 5: Comparación por contenido (hash)");
+        Console.WriteLine("📋 Compara contenido real de archivos, no solo tamaño/fecha");
+
+        var task = new FileCopyTask
+        {
+            Name = "Comparar Por Contenido",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestination(@"C:\FileUtilityTest\Destination")
+        .AddFilePattern("*.dat")
+        .SkipDuplicates()
+        .CompareByContent()  // ✅ NUEVO - Más lento pero preciso
+        .Enable();
+
+        var taskId = await fileUtility.CreateTaskAsync(task);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+        Console.WriteLine("⏳ Comparación por hash puede ser más lenta...");
+
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Archivos: {result.SuccessfulFiles}/{result.TotalFiles}");
+    }
+
+    // EJEMPLO 6: Archivos específicos + condiciones
+    private static async Task Example6_SpecificWithConditions(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 6: Archivos específicos + condiciones");
+        Console.WriteLine("📋 Archivos específicos que ADEMÁS cumplan condiciones");
+
+        var task = new FileCopyTask
+        {
+            Name = "Específicos Con Condiciones",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestination(@"C:\FileUtilityTest\Destination\Conditional")
+        .AddSpecificFiles("Prueba1.xlsx", "Prueba2.xlsx", "ReporteVentas.pdf")
+        .FileSizeGreaterThan(1500)  // Y que sean mayores a 1.5KB
+        .SkipDuplicates()
+        .Enable();
+
+        Directory.CreateDirectory(@"C:\FileUtilityTest\Destination\Conditional");
+
+        var taskId = await fileUtility.CreateTaskAsync(task);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+        Console.WriteLine("📋 Solo copiará archivos específicos que sean >1.5KB");
+
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Archivos: {result.SuccessfulFiles}/{result.TotalFiles}");
+    }
+
+    // EJEMPLO 7: Múltiples archivos específicos + múltiples destinos
+    private static async Task Example7_MultipleSpecificMultipleDestinations(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 7: Múltiples específicos + múltiples destinos");
+        Console.WriteLine("📋 Varios archivos específicos copiados a varios destinos");
+
+        var task = new FileCopyTask
+        {
+            Name = "Multi Específicos Multi Destinos",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestinations(
+            @"C:\FileUtilityTest\Destination\Backup1",
+            @"C:\FileUtilityTest\Destination\Backup2",
+            @"C:\FileUtilityTest\Destination\Backup3"
+        )
+        .AddSpecificFiles(
+            "Prueba1.xlsx",
+            "Prueba2.xlsx",
+            "ReporteVentas.pdf",
+            "ConfiguracionSistema.json"
+        )
+        .SkipDuplicates()
+        .Enable();
+
+        // Crear directorios
+        Directory.CreateDirectory(@"C:\FileUtilityTest\Destination\Backup1");
+        Directory.CreateDirectory(@"C:\FileUtilityTest\Destination\Backup2");
+        Directory.CreateDirectory(@"C:\FileUtilityTest\Destination\Backup3");
+
+        var taskId = await fileUtility.CreateTaskAsync(task);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+        Console.WriteLine($"📋 Copiando {task.SpecificFiles.Count} archivos a {task.DestinationPaths.Count} destinos");
+
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Operaciones: {result.SuccessfulFiles}/{result.TotalFiles}");
+    }
+
+    // EJEMPLO 8: Prueba completa de duplicados
+    private static async Task Example8_CompleteDuplicateTest(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 8: Prueba completa de todos los tipos de duplicados");
+
+        // Crear 4 tareas con diferentes comportamientos
+        var tasks = new[]
+        {
+            new FileCopyTask { Name = "Test Skip" }.AddDestination(@"C:\FileUtilityTest\Destination\TestSkip")
+                .AddSpecificFile("Duplicado1.txt").SkipDuplicates(),
+
+            new FileCopyTask { Name = "Test Overwrite" }.AddDestination(@"C:\FileUtilityTest\Destination\TestOverwrite")
+                .AddSpecificFile("Duplicado1.txt").OverwriteAlways(),
+
+            new FileCopyTask { Name = "Test IfNewer" }.AddDestination(@"C:\FileUtilityTest\Destination\TestIfNewer")
+                .AddSpecificFile("Duplicado1.txt").OverwriteIfNewer(),
+
+            new FileCopyTask { Name = "Test Rename" }.AddDestination(@"C:\FileUtilityTest\Destination\TestRename")
+                .AddSpecificFile("Duplicado1.txt").RenameIfExists()
+        };
+
+        foreach (var task in tasks)
+        {
+            task.SourcePath = @"C:\FileUtilityTest\Source";
+            task.Enable();
+
+            // Crear directorio
+            Directory.CreateDirectory(task.DestinationPaths[0]);
+
+            var taskId = await fileUtility.CreateTaskAsync(task);
+            Console.WriteLine($"\n🔧 Ejecutando: {task.Name}");
+
+            var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+            Console.WriteLine($"   📊 {result.Status}: {result.SuccessfulFiles}/{result.TotalFiles}");
+
+            if (result.FileResults.Any())
+            {
+                var fileResult = result.FileResults[0];
+                var finalName = Path.GetFileName(fileResult.DestinationPath);
+                Console.WriteLine($"   📄 Archivo final: {finalName}");
+            }
+        }
+    }
+
+    private static async Task ShowFiles()
+    {
+        Console.WriteLine("\n📊 ARCHIVOS EN SISTEMA:");
+
+        var sourceDir = @"C:\FileUtilityTest\Source";
+        var destDir = @"C:\FileUtilityTest\Destination";
+
+        // Archivos origen
+        Console.WriteLine($"\n📂 ORIGEN ({sourceDir}):");
+        if (Directory.Exists(sourceDir))
+        {
+            var sourceFiles = Directory.GetFiles(sourceDir);
+            foreach (var file in sourceFiles)
+            {
+                var info = new FileInfo(file);
+                Console.WriteLine($"   📄 {Path.GetFileName(file)} ({info.Length} bytes, {info.LastWriteTime:HH:mm:ss})");
+            }
+        }
+
+        // Archivos destino
+        Console.WriteLine($"\n📤 DESTINO ({destDir}):");
+        if (Directory.Exists(destDir))
+        {
+            ShowDirectoryContents(destDir, "");
+        }
+    }
+
+    private static void ShowDirectoryContents(string directory, string indent)
+    {
+        try
+        {
+            var dirs = Directory.GetDirectories(directory);
+            var files = Directory.GetFiles(directory);
+
+            foreach (var dir in dirs)
+            {
+                Console.WriteLine($"{indent}📁 {Path.GetFileName(dir)}/");
+                ShowDirectoryContents(dir, indent + "  ");
+            }
+
+            foreach (var file in files)
+            {
+                var info = new FileInfo(file);
+                Console.WriteLine($"{indent}📄 {Path.GetFileName(file)} ({info.Length} bytes, {info.LastWriteTime:HH:mm:ss})");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{indent}❌ Error: {ex.Message}");
+        }
+    }
+
+    private static async Task CleanDestination()
+    {
+        Console.WriteLine("\n🧹 Limpiando directorio destino...");
+
+        var destDir = @"C:\FileUtilityTest\Destination";
+        if (Directory.Exists(destDir))
+        {
+            try
+            {
+                Directory.Delete(destDir, true);
+                Directory.CreateDirectory(destDir);
+                Console.WriteLine("✅ Directorio destino limpiado");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error limpiando: {ex.Message}");
+            }
+        }
+    }
+
+    private static async Task ToggleScheduler(FileUtilityService fileUtility)
+    {
+        if (fileUtility.IsSchedulerRunning)
+        {
+            Console.WriteLine("⏹️ Deteniendo scheduler...");
+            await fileUtility.StopSchedulerAsync();
+        }
+        else
+        {
+            Console.WriteLine("🚀 Iniciando scheduler...");
+            await fileUtility.StartSchedulerAsync();
+        }
+
+        Console.WriteLine($"📊 Estado: {(fileUtility.IsSchedulerRunning ? "Activo" : "Inactivo")}");
+    }
+
+    private static void ConfigureEvents(FileUtilityService fileUtility)
+    {
         fileUtility.OperationCompleted += (sender, e) =>
         {
-            var statusIcon = e.Result.Status switch
+            var icon = e.Result.Status switch
             {
                 CopyStatus.Completed => "✅",
                 CopyStatus.PartialSuccess => "⚠️",
                 CopyStatus.Failed => "❌",
                 _ => "ℹ️"
             };
-
-            Console.WriteLine($"{statusIcon} COMPLETADO: {e.Result.TaskName}");
-            Console.WriteLine($"   Estado: {e.Result.Status}");
-            Console.WriteLine($"   Archivos: {e.Result.SuccessfulFiles}/{e.Result.TotalFiles} exitosos");
-            Console.WriteLine($"   Duración: {e.Result.Duration.TotalSeconds:F1}s");
-
-            if (!string.IsNullOrEmpty(e.Result.GeneralError))
-                Console.WriteLine($"   Error: {e.Result.GeneralError}");
+            Console.WriteLine($"{icon} [COMPLETADA] {e.Result.TaskName}");
         };
 
-        // Evento para cada archivo procesado
         fileUtility.FileProcessed += (sender, e) =>
         {
-            var statusIcon = e.Result.Success ? "✓" : "✗";
-            var fileName = System.IO.Path.GetFileName(e.Result.FilePath);
-            Console.WriteLine($"   {statusIcon} {fileName} ({e.Result.FileSizeBytes / 1024}KB)");
+            var status = e.Result.Success ? "✓" : "✗";
+            var fileName = Path.GetFileName(e.Result.FilePath);
+            var destName = Path.GetFileName(e.Result.DestinationPath);
 
-            if (!e.Result.Success && !string.IsNullOrEmpty(e.Result.ErrorMessage))
-                Console.WriteLine($"     Error: {e.Result.ErrorMessage}");
-        };
-
-        // Evento cuando se ejecuta una tarea programada
-        fileUtility.TaskExecuting += (sender, e) =>
-        {
-            Console.WriteLine($"⏰ PROGRAMADA: {e.TaskName} (programada: {e.ScheduledTime:HH:mm:ss})");
-        };
-    }
-
-    private static async Task CreateSampleTasks(FileUtilityService fileUtility)
-    {
-        Console.WriteLine("Creando tareas de ejemplo...\n");
-
-        // Tarea 1: Backup diario de documentos modificados hoy
-        var documentBackup = new FileCopyTask
-        {
-            Name = "Backup Documentos Diario",
-            SourcePath = @"C:\Users\Documents"  // Cambia por tu ruta real
-        }
-        .AddDestination(@"D:\Backup\Documents")
-        .AddFilePatterns("*.docx", "*.pdf", "*.xlsx", "*.txt")
-        .ModifiedToday()  // Solo archivos modificados hoy
-        .Enable();
-
-        var dailySchedule = new ScheduleConfiguration()
-            .Daily()
-            .AddExecutionTime(8, 0)   // 8:00 AM
-            .AddExecutionTime(17, 0)  // 5:00 PM
-            .OnWeekdays()             // Solo días laborales
-            .Enable();
-
-        var task1Id = await fileUtility.CreateTaskAsync(documentBackup, dailySchedule);
-        Console.WriteLine($"✅ Tarea creada: Backup Documentos ({task1Id})");
-
-        // Tarea 2: Logs de aplicación cada 2 horas
-        var logBackup = new FileCopyTask
-        {
-            Name = "Backup Logs Aplicación",
-            SourcePath = @"C:\Logs\MyApp"
-        }
-        .AddDestination(@"\\Server\Logs\Backup")
-        .AddFilePattern("*.log")
-        .ModifiedSince(DateTime.Now.AddHours(-3))  // Últimas 3 horas
-        .FileSizeGreaterThan(1024)  // Mayor a 1KB
-        .Enable();
-
-        var intervalSchedule = new ScheduleConfiguration()
-            .EveryMinutes(120)  // Cada 2 horas
-            .StartingAt(DateTime.Now.AddMinutes(5))
-            .Enable();
-
-        var task2Id = await fileUtility.CreateTaskAsync(logBackup, intervalSchedule);
-        Console.WriteLine($"✅ Tarea creada: Backup Logs ({task2Id})");
-
-        // Tarea 3: Archivos grandes semanales
-        var weeklyArchive = new FileCopyTask
-        {
-            Name = "Archivo Semanal Archivos Grandes",
-            SourcePath = @"C:\Data\Processing"
-        }
-        .AddDestinations(@"\\Archive\Weekly", @"\\Backup\Archive")
-        .AddFilePatterns("*.zip", "*.rar", "*.7z", "*.tar")
-        .ModifiedSince(DateTime.Today.AddDays(-7))  // Última semana
-        .FileSizeGreaterThan(50 * 1024 * 1024)     // Mayor a 50MB
-        .Enable();
-
-        var weeklySchedule = new ScheduleConfiguration()
-            .Weekly()
-            .OnDays(DayOfWeek.Sunday)    // Solo domingos
-            .AddExecutionTime(3, 0)      // 3:00 AM
-            .Enable();
-
-        var task3Id = await fileUtility.CreateTaskAsync(weeklyArchive, weeklySchedule);
-        Console.WriteLine($"✅ Tarea creada: Archivo Semanal ({task3Id})");
-
-        Console.WriteLine();
-    }
-
-    private static async Task ShowSystemStatus(FileUtilityService fileUtility)
-    {
-        Console.WriteLine("=== ESTADO DEL SISTEMA ===");
-
-        var tasks = fileUtility.GetAllTasks();
-        var schedules = fileUtility.GetAllSchedules();
-
-        Console.WriteLine($"📋 Total de tareas: {tasks.Count}");
-        Console.WriteLine($"⏰ Tareas programadas: {schedules.Count(s => s.IsEnabled)}");
-        Console.WriteLine($"🟢 Programador activo: {(fileUtility.IsSchedulerRunning ? "Sí" : "No")}");
-
-        Console.WriteLine("\n=== PRÓXIMAS EJECUCIONES ===");
-        foreach (var task in tasks.Where(t => t.IsEnabled))
-        {
-            var nextExecutions = await fileUtility.GetNextExecutionTimesAsync(task.Id, 3);
-            Console.WriteLine($"\n📁 {task.Name}:");
-
-            if (nextExecutions.Count > 0)
+            if (fileName != destName)
             {
-                foreach (var next in nextExecutions)
-                {
-                    var timeUntil = next - DateTime.Now;
-                    Console.WriteLine($"   ⏰ {next:ddd dd/MM/yyyy HH:mm} (en {timeUntil.TotalHours:F1}h)");
-                }
+                Console.WriteLine($"   {status} {fileName} → {destName}");
             }
             else
             {
-                Console.WriteLine("   ❌ Sin programación activa");
+                Console.WriteLine($"   {status} {fileName}");
             }
-
-            if (task.LastExecuted.HasValue)
-            {
-                Console.WriteLine($"   📅 Última ejecución: {task.LastExecuted:dd/MM/yyyy HH:mm:ss}");
-            }
-        }
-        Console.WriteLine();
-    }
-
-    private static async Task ExecuteTaskManually(FileUtilityService fileUtility)
-    {
-        var tasks = fileUtility.GetAllTasks();
-        if (!tasks.Any())
-        {
-            Console.WriteLine("❌ No hay tareas disponibles para ejecutar");
-            return;
-        }
-
-        var firstTask = tasks.First();
-        Console.WriteLine($"🔧 Ejecutando manualmente: {firstTask.Name}");
-        Console.WriteLine("   (Esta es solo una demostración - ajusta las rutas en el código)");
-
-        try
-        {
-            var result = await fileUtility.ExecuteTaskNowAsync(firstTask.Id);
-
-            Console.WriteLine($"✅ Ejecución manual completada:");
-            Console.WriteLine($"   Estado: {result.Status}");
-            Console.WriteLine($"   Archivos encontrados: {result.TotalFiles}");
-            Console.WriteLine($"   Archivos copiados: {result.SuccessfulFiles}");
-            Console.WriteLine($"   Errores: {result.FailedFiles}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error en ejecución manual: {ex.Message}");
-        }
-    }
-
-    private static async Task InteractiveMode(FileUtilityService fileUtility)
-    {
-        while (true)
-        {
-            var key = Console.ReadKey(true);
-
-            switch (key.KeyChar)
-            {
-                case 'q':
-                case 'Q':
-                    return;
-
-                case 's':
-                case 'S':
-                    await ShowSystemStatus(fileUtility);
-                    break;
-
-                case 'e':
-                case 'E':
-                    await ExecuteTaskManually(fileUtility);
-                    break;
-
-                case 't':
-                case 'T':
-                    await ShowTaskDetails(fileUtility);
-                    break;
-
-                default:
-                    Console.WriteLine("\n❓ Comandos disponibles:");
-                    Console.WriteLine("   's' - Ver estado del sistema");
-                    Console.WriteLine("   'e' - Ejecutar tarea manualmente");
-                    Console.WriteLine("   't' - Ver detalles de tareas");
-                    Console.WriteLine("   'q' - Salir");
-                    break;
-            }
-        }
-    }
-
-    private static async Task ShowTaskDetails(FileUtilityService fileUtility)
-    {
-        Console.WriteLine("\n=== DETALLES DE TAREAS ===");
-
-        var tasks = fileUtility.GetAllTasks();
-
-        for (int i = 0; i < tasks.Count; i++)
-        {
-            var task = tasks[i];
-            Console.WriteLine($"\n{i + 1}. 📁 {task.Name} ({task.Id})");
-            Console.WriteLine($"   📂 Origen: {task.SourcePath}");
-            Console.WriteLine($"   📤 Destinos: {string.Join(", ", task.DestinationPaths)}");
-            Console.WriteLine($"   🏷️ Patrones: {string.Join(", ", task.FilePatterns.DefaultIfEmpty("*.*"))}");
-            Console.WriteLine($"   🟢 Habilitada: {task.IsEnabled}");
-            Console.WriteLine($"   📊 Condiciones: {task.Conditions.Count}");
-
-            foreach (var condition in task.Conditions)
-            {
-                Console.WriteLine($"      - {condition.Type}: {condition.Value}");
-            }
-
-            if (task.LastExecuted.HasValue)
-            {
-                Console.WriteLine($"   📅 Última ejecución: {task.LastExecuted:dd/MM/yyyy HH:mm:ss}");
-            }
-
-            var schedule = fileUtility.GetAllSchedules().FirstOrDefault(s => s.TaskId == task.Id);
-            if (schedule != null && schedule.IsEnabled)
-            {
-                Console.WriteLine($"   ⏰ Programación: {schedule.Type}");
-                Console.WriteLine($"      Horarios: {string.Join(", ", schedule.ExecutionTimes.Select(t => t.ToString(@"hh\:mm")))}");
-
-                if (schedule.DaysOfWeek.Any())
-                    Console.WriteLine($"      Días: {string.Join(", ", schedule.DaysOfWeek)}");
-            }
-        }
+        };
     }
 }

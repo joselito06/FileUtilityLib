@@ -16,15 +16,18 @@ namespace FileUtilityLib.Scheduler.Jobs
         public async Task Execute(IJobExecutionContext context)
         {
             var taskId = context.JobDetail.JobDataMap.GetString("TaskId");
+            var taskName = context.JobDetail.JobDataMap.GetString("TaskName") ?? "Unknown";
+
             if (string.IsNullOrEmpty(taskId))
             {
                 throw new InvalidOperationException("TaskId no especificado en JobDataMap");
             }
 
-            var fileCopyService = (IFileCopyService)context.Scheduler.Context.Get("FileCopyService");
-            var taskManager = (ITaskManager)context.Scheduler.Context.Get("TaskManager");
-            var logger = (ILogger)context.Scheduler.Context.Get("Logger");
-            var schedulerService = (SchedulerService)context.Scheduler.Context.Get("SchedulerService");
+            // Obtener servicios del contexto
+            var fileCopyService = (IFileCopyService?)context.Scheduler.Context.Get("FileCopyService");
+            var taskManager = (ITaskManager?)context.Scheduler.Context.Get("TaskManager");
+            var logger = (ILogger?)context.Scheduler.Context.Get("Logger");
+            var schedulerService = (SchedulerService?)context.Scheduler.Context.Get("SchedulerService");
 
             if (fileCopyService == null || taskManager == null || logger == null)
             {
@@ -46,20 +49,21 @@ namespace FileUtilityLib.Scheduler.Jobs
 
             try
             {
-                logger.LogInformation("Ejecutando tarea programada: {TaskName} (ID: {TaskId})", task.Name, taskId);
+                logger.LogInformation("🔥 EJECUTANDO TAREA PROGRAMADA: {TaskName} (ID: {TaskId})", task.Name, taskId);
 
                 // Notificar inicio de ejecución
-                schedulerService?.OnTaskExecuting(taskId, task.Name, context.ScheduledFireTimeUtc?.DateTime ?? DateTime.Now);
+                var scheduledTime = context.ScheduledFireTimeUtc?.DateTime ?? DateTime.Now;
+                schedulerService?.OnTaskExecuting(taskId, task.Name, scheduledTime);
 
                 var result = await fileCopyService.ExecuteTaskAsync(task, context.CancellationToken);
 
                 logger.LogInformation(
-                    "Tarea programada completada: {TaskName}. Estado: {Status}, Exitosos: {Success}, Fallidos: {Failed}",
+                    "✅ TAREA PROGRAMADA COMPLETADA: {TaskName}. Estado: {Status}, Exitosos: {Success}, Fallidos: {Failed}",
                     task.Name, result.Status, result.SuccessfulFiles, result.FailedFiles);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error ejecutando tarea programada: {TaskName}", task.Name);
+                logger.LogError(ex, "❌ ERROR ejecutando tarea programada: {TaskName}", task.Name);
                 throw;
             }
         }
