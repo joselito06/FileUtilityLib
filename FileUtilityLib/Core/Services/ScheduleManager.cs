@@ -1,4 +1,5 @@
-﻿using FileUtilityLib.Models;
+﻿using FileUtilityLib.Core.Compatibility;
+using FileUtilityLib.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System;
@@ -75,7 +76,8 @@ namespace FileUtilityLib.Core.Services
                     WriteIndented = true
                 });
 
-                await File.WriteAllTextAsync(_configFilePath, json);
+                //await File.WriteAllTextAsync(_configFilePath, json);
+                await FrameworkCompatibility.WriteAllTextAsync(_configFilePath, json);
 
                 _logger.LogDebug("Programas guardados en: {ConfigFile}", _configFilePath);
             }
@@ -96,7 +98,8 @@ namespace FileUtilityLib.Core.Services
                     return;
                 }
 
-                var json = await File.ReadAllTextAsync(_configFilePath);
+                //var json = await File.ReadAllTextAsync(_configFilePath);
+                var json = await FrameworkCompatibility.ReadAllTextAsync(_configFilePath);
                 var schedules = JsonSerializer.Deserialize<List<ScheduleConfiguration>>(json);
 
                 _schedules.Clear();

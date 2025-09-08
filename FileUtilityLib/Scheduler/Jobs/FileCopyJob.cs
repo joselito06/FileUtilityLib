@@ -1,7 +1,7 @@
 ﻿using FileUtilityLib.Core.Interfaces;
 using FileUtilityLib.Scheduler.Services;
 using Microsoft.Extensions.Logging;
-using Quartz;
+//using Quartz;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,10 +10,10 @@ using System.Threading.Tasks;
 
 namespace FileUtilityLib.Scheduler.Jobs
 {
-    [DisallowConcurrentExecution]
-    public class FileCopyJob : IJob
+    //[DisallowConcurrentExecution]
+    public class FileCopyJob //: IJob
     {
-        public async Task Execute(IJobExecutionContext context)
+        /*public async Task Execute(IJobExecutionContext context)
         {
             var taskId = context.JobDetail.JobDataMap.GetString("TaskId");
             var taskName = context.JobDetail.JobDataMap.GetString("TaskName") ?? "Unknown";
@@ -66,6 +66,6 @@ namespace FileUtilityLib.Scheduler.Jobs
                 logger.LogError(ex, "❌ ERROR ejecutando tarea programada: {TaskName}", task.Name);
                 throw;
             }
-        }
+        }*/
     }
 }

@@ -43,11 +43,11 @@ namespace FileUtilityLib.Scheduler.Services
                 services.GetRequiredService<ILogger<FileCopyService>>(),
                 TaskManager);
 
-            SchedulerService = new SchedulerService(
+            /*SchedulerService = new SchedulerService(
                 services.GetRequiredService<ILogger<SchedulerService>>(),
                 FileCopyService,
                 TaskManager,
-                configDirectory);
+                configDirectory);*/
 
             // Suscribirse a eventos de servicios
             SubscribeToEvents();

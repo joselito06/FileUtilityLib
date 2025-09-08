@@ -1,4 +1,5 @@
-﻿using FileUtilityLib.Core.Interfaces;
+﻿using FileUtilityLib.Core.Compatibility;
+using FileUtilityLib.Core.Interfaces;
 using FileUtilityLib.Models;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -86,7 +87,8 @@ namespace FileUtilityLib.Core.Services
                     WriteIndented = true
                 });
 
-                await File.WriteAllTextAsync(_configFilePath, json);
+                //await File.WriteAllTextAsync(_configFilePath, json);
+                await FrameworkCompatibility.WriteAllTextAsync(_configFilePath, json);
 
                 _logger.LogDebug("Tareas guardadas en: {ConfigFile}", _configFilePath);
             }
@@ -107,7 +109,8 @@ namespace FileUtilityLib.Core.Services
                     return;
                 }
 
-                var json = await File.ReadAllTextAsync(_configFilePath);
+                //var json = await File.ReadAllTextAsync(_configFilePath);
+                var json = await FrameworkCompatibility.ReadAllTextAsync(_configFilePath);
                 var tasks = JsonSerializer.Deserialize<List<FileCopyTask>>(json);
 
                 _tasks.Clear();

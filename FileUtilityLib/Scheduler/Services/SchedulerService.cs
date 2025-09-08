@@ -3,25 +3,25 @@ using FileUtilityLib.Core.Services;
 using FileUtilityLib.Models.Events;
 using FileUtilityLib.Models;
 using Microsoft.Extensions.Logging;
-using Quartz;
-using Quartz.Impl;
+//using Quartz;
+//using Quartz.Impl;
 using FileUtilityLib.Scheduler.Jobs;
 using System.Collections.Specialized;
 
 namespace FileUtilityLib.Scheduler.Services
 {
-    public class SchedulerService : ISchedulerService
+    public class SchedulerService //: ISchedulerService
     {
-        private readonly ILogger<SchedulerService> _logger;
+        /*private readonly ILogger<SchedulerService> _logger;
         private readonly IFileCopyService _fileCopyService;
         private readonly ITaskManager _taskManager;
         private readonly ScheduleManager _scheduleManager;
-        private IScheduler? _scheduler;
+        //private IScheduler? _scheduler;
 
         public event EventHandler<TaskScheduleEventArgs>? TaskScheduled;
         public event EventHandler<TaskScheduleEventArgs>? TaskExecuting;
 
-        public bool IsRunning => _scheduler?.IsStarted == true && !_scheduler.IsShutdown;
+        //public bool IsRunning => _scheduler?.IsStarted == true && !_scheduler.IsShutdown;
 
         public SchedulerService(
             ILogger<SchedulerService> logger,
@@ -122,7 +122,7 @@ namespace FileUtilityLib.Scheduler.Services
                     .UsingJobData("TaskName", task.Name)
                     .Build();
 
-                /*// Crear triggers según el tipo de programación
+                // Crear triggers según el tipo de programación
                 var triggers = CreateTriggersForSchedule(taskId, schedule);
 
                 if (triggers.Any())
@@ -142,7 +142,7 @@ namespace FileUtilityLib.Scheduler.Services
                         TaskScheduled?.Invoke(this, new TaskScheduleEventArgs(
                             taskId, task.Name, nextExecution.Value, DateTime.Now));
                     }
-                }*/
+                }
 
                 // Crear trigger según el tipo
                 ITrigger trigger = schedule.Type switch
@@ -493,6 +493,6 @@ namespace FileUtilityLib.Scheduler.Services
         public void Dispose()
         {
 
-        }
+        }*/
     }
 }
