@@ -2,6 +2,7 @@
 using FileUtilityLib.Models.Events;
 using FileUtilityLib.Models;
 using Microsoft.Extensions.Logging;
+using FileUtilityLib.Core.Compatibility;
 
 namespace FileUtilityLib.Core.Services
 {
@@ -82,7 +83,26 @@ namespace FileUtilityLib.Core.Services
 
                     foreach (var destPath in task.DestinationPaths)
                     {
-                        var destFile = Path.Combine(destPath, fileName);
+                        var finalDestPath = destPath;
+
+                        if (task.OrganizeByDate)
+                        {
+                            var dateFolder = DateTime.Now.ToString(task.DateFolderFormat);
+                            finalDestPath = Path.Combine(destPath, dateFolder);
+
+                            // Crear directorio de fecha si no existe
+                            try
+                            {
+                                Directory.CreateDirectory(finalDestPath);
+                                _logger.LogDebug("📁 Carpeta de fecha creada: {DateFolder}", dateFolder);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Error creando carpeta de fecha: {DateFolder}", dateFolder);
+                            }
+                        }
+
+                        var destFile = Path.Combine(finalDestPath, fileName);
                         var fileResult = new FileOperationResult
                         {
                             FilePath = sourceFile,
@@ -112,7 +132,7 @@ namespace FileUtilityLib.Core.Services
                             var finalDestFile = shouldCopy.FinalDestinationPath ?? destFile;
                             fileResult.DestinationPath = finalDestFile;
 
-                            await CopyFileAsync(sourceFile, destFile, cancellationToken);
+                            await CopyFileAsync(sourceFile, finalDestFile, cancellationToken);
 
                             fileResult.Success = true;
                             result.SuccessfulFiles++;
@@ -301,7 +321,7 @@ namespace FileUtilityLib.Core.Services
                         if (!string.IsNullOrEmpty(condition.StringValue))
                         {
                             var extension = Path.GetExtension(filePath).TrimStart('.');
-                            var conditionExt = condition.StringValue.TrimStart('.');
+                            var conditionExt = condition.StringValue?.TrimStart('.');
                             if (!extension.Equals(conditionExt, StringComparison.OrdinalIgnoreCase))
                                 return false;
                         }
@@ -311,7 +331,7 @@ namespace FileUtilityLib.Core.Services
                         if (!string.IsNullOrEmpty(condition.StringValue))
                         {
                             var fileName = Path.GetFileNameWithoutExtension(filePath);
-                            if (!fileName.Contains(condition.StringValue, StringComparison.OrdinalIgnoreCase))
+                            if (!fileName.ToLower().Contains(condition.StringValue?.ToLower() ?? string.Empty))
                                 return false;
                         }
                         break;
@@ -321,15 +341,20 @@ namespace FileUtilityLib.Core.Services
             return true;
         }
 
+        /// <summary>
+        /// Copia un archivo de forma asíncrona compatible con todos los frameworks
+        /// </summary>
         private static async Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken)
         {
             const int bufferSize = 4096;
             using var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, FileOptions.SequentialScan);
             using var destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize, FileOptions.SequentialScan);
 
-            await sourceStream.CopyToAsync(destinationStream, bufferSize, cancellationToken);
+            //await sourceStream.CopyToAsync(destinationStream, bufferSize, cancellationToken);
+            // Usar método compatible
+            await FrameworkCompatibility.CopyToAsync(sourceStream, destinationStream, bufferSize, cancellationToken);
         }
-
+        
         // ✅ NUEVO: Comparar si dos archivos son iguales
         private bool AreFilesEqual(FileInfo sourceInfo, FileInfo destInfo, DuplicateComparison comparison)
         {
@@ -354,13 +379,20 @@ namespace FileUtilityLib.Core.Services
             }
         }
 
+        /// <summary>
+        /// Comparar archivos por hash SHA-256 compatible con todos los frameworks
+        /// </summary>
         // ✅ NUEVO: Comparar archivos por hash SHA-256
         private bool AreFilesEqualByHash(string file1, string file2)
         {
             try
             {
+#if NET6_0_OR_GREATER || NET7_0_OR_GREATER || NET8_0_OR_GREATER
                 using var sha256 = System.Security.Cryptography.SHA256.Create();
-
+#else
+                // .NET Framework - Implementación compatible
+                using var sha256 = System.Security.Cryptography.SHA256Managed.Create();
+#endif
                 byte[] hash1, hash2;
 
                 using (var stream1 = File.OpenRead(file1))
@@ -372,8 +404,14 @@ namespace FileUtilityLib.Core.Services
                 {
                     hash2 = sha256.ComputeHash(stream2);
                 }
-
+#if NET6_0_OR_GREATER || NET7_0_OR_GREATER || NET8_0_OR_GREATER
                 return hash1.SequenceEqual(hash2);
+#elif !NETSTANDARD
+                // .NET Framework - Comparación manual
+                return CompareByteArrays(hash1, hash2);
+#else
+                return false;
+#endif
             }
             catch (Exception ex)
             {
@@ -384,7 +422,24 @@ namespace FileUtilityLib.Core.Services
                 return info1.Length == info2.Length && info1.LastWriteTime == info2.LastWriteTime;
             }
         }
+#if NETFRAMEWORK || NETSTANDARD2_0
+        /// <summary>
+        /// Comparación de arrays para frameworks antiguos
+        /// </summary>
+        private static bool CompareByteArrays(byte[] array1, byte[] array2)
+        {
+            if (array1.Length != array2.Length)
+                return false;
 
+            for (int i = 0; i < array1.Length; i++)
+            {
+                if (array1[i] != array2[i])
+                    return false;
+            }
+
+            return true;
+        }
+#endif
         // ✅ NUEVO: Generar nombre único para archivo
         private string GenerateUniqueFileName(string originalPath)
         {

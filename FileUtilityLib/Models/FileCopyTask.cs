@@ -17,5 +17,7 @@ namespace FileUtilityLib.Models
         // ✅ NUEVO: Configuración de duplicados
         public DuplicateHandling DuplicateHandling { get; set; } = DuplicateHandling.Skip;
         public DuplicateComparison DuplicateComparison { get; set; } = DuplicateComparison.SizeAndDate;
+        public bool OrganizeByDate { get; set; } = false;
+        public string DateFolderFormat { get; set; } = "dd-MM-yyyy";
     }
 }
