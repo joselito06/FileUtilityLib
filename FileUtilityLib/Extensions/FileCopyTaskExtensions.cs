@@ -153,6 +153,19 @@ namespace FileUtilityLib.Extensions
             return task.AddCondition(ConditionType.FileSizeLessThan, sizeInBytes);
         }
 
+        public static FileCopyTask OrganizeByDateFolder(this FileCopyTask task, string format = "dd-MM-yyyy")
+        {
+            task.OrganizeByDate = true;
+            task.DateFolderFormat = format;
+            return task;
+        }
+
+        public static FileCopyTask DisableDateOrganization(this FileCopyTask task)
+        {
+            task.OrganizeByDate = false;
+            return task;
+        }
+
         public static FileCopyTask Enable(this FileCopyTask task)
         {
             task.IsEnabled = true;

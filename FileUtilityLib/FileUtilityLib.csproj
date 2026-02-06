@@ -26,6 +26,7 @@
     <DefineConstants Condition="'$(TargetFramework)' == 'net6.0'">NET6_0_OR_GREATER</DefineConstants>
     <DefineConstants Condition="'$(TargetFramework)' == 'net7.0'">NET7_0_OR_GREATER</DefineConstants>
     <DefineConstants Condition="'$(TargetFramework)' == 'net8.0'">NET8_0_OR_GREATER</DefineConstants>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     
   </PropertyGroup>
 

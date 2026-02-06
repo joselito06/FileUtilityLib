@@ -104,18 +104,20 @@ internal class Program
         while (true)
         {
             Console.WriteLine("\n🧪 EJEMPLOS CON NUEVAS FUNCIONALIDADES:");
-            Console.WriteLine("1️⃣  - Archivos específicos solamente");
-            Console.WriteLine("2️⃣  - Saltar duplicados (Skip)");
-            Console.WriteLine("3️⃣  - Sobrescribir si es más nuevo");
-            Console.WriteLine("4️⃣  - Renombrar archivos duplicados");
-            Console.WriteLine("5️⃣  - Comparación por contenido (hash)");
-            Console.WriteLine("6️⃣  - Combinación: específicos + condiciones");
-            Console.WriteLine("7️⃣  - Múltiples archivos específicos + múltiples destinos");
-            Console.WriteLine("8️⃣  - Prueba completa de duplicados");
-            Console.WriteLine("📊 - Ver archivos en origen y destino");
-            Console.WriteLine("🧹 - Limpiar destino");
-            Console.WriteLine("🚀 - Iniciar/Parar scheduler");
-            Console.WriteLine("❌ - Salir");
+            Console.WriteLine("0  - Archivos específicos solamente con Fecha Especifica");
+            Console.WriteLine("1️  - Archivos específicos solamente");
+            Console.WriteLine("2️  - Saltar duplicados (Skip)");
+            Console.WriteLine("3️  - Sobrescribir si es más nuevo");
+            Console.WriteLine("4️  - Renombrar archivos duplicados");
+            Console.WriteLine("5️  - Comparación por contenido (hash)");
+            Console.WriteLine("6️  - Combinación: específicos + condiciones");
+            Console.WriteLine("7️  - Múltiples archivos específicos + múltiples destinos");
+            Console.WriteLine("8️  - Prueba completa de duplicados");
+            Console.WriteLine("9  - Prueba formato con Hora (yyyy-MM-dd_HH-mm)");
+            Console.WriteLine("S - Ver archivos en origen y destino");
+            Console.WriteLine("C - Limpiar destino");
+            Console.WriteLine("R - Iniciar/Parar scheduler");
+            Console.WriteLine("X - Salir");
 
             Console.Write("\n🎯 Selecciona un ejemplo: ");
             var input = Console.ReadKey().KeyChar;
@@ -125,6 +127,7 @@ internal class Program
             {
                 switch (input)
                 {
+                    case '0': await Example0_SpecificFiles(fileUtility); break;
                     case '1': await Example1_SpecificFiles(fileUtility); break;
                     case '2': await Example2_SkipDuplicates(fileUtility); break;
                     case '3': await Example3_OverwriteIfNewer(fileUtility); break;
@@ -133,6 +136,7 @@ internal class Program
                     case '6': await Example6_SpecificWithConditions(fileUtility); break;
                     case '7': await Example7_MultipleSpecificMultipleDestinations(fileUtility); break;
                     case '8': await Example8_CompleteDuplicateTest(fileUtility); break;
+                    case '9': await Example9_OrganizeByDateFolder(fileUtility); break;
                     case 's':
                     case 'S': await ShowFiles(); break;
                     case 'c':
@@ -149,6 +153,40 @@ internal class Program
                 Console.WriteLine($"❌ Error ejecutando ejemplo: {ex.Message}");
             }
         }
+    }
+
+    // EJEMPLO 0: Solo archivos específicos en tiempo especifico
+    private static async Task Example0_SpecificFiles(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 1: Solo archivos específicos");
+        Console.WriteLine("📋 Copiará ÚNICAMENTE: Prueba1.xlsx y Prueba2.xlsx");
+
+        var task = new FileCopyTask
+        {
+            Name = "Solo Archivos Específicos Con tiempo Especificos",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestination($"C:\\FileUtilityTest\\Destination\\Specific\\{DateTime.Now.ToString("dd-MM-yyyy")}")
+        .AddSpecificFiles("Prueba1.xlsx", "Prueba2.xlsx")  // ✅ NUEVO
+        //.SkipDuplicates()  // ✅ NUEVO
+        .OverwriteIfNewer()
+        .Enable();
+
+        //Directory.CreateDirectory(@"C:\FileUtilityTest\Destination\Specific");
+
+        var schedule = new ScheduleConfiguration()
+                .Daily()
+                .AddExecutionTime(00, 31)
+                .AddExecutionTime(00, 32)
+                .OnWeekdays()
+                .Enable();
+
+        var taskId = await fileUtility.CreateTaskAsync(task, schedule);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+
+        // Ejecutar inmediatamente para ver resultado
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Archivos: {result.SuccessfulFiles}/{result.TotalFiles}");
     }
 
     // EJEMPLO 1: Solo archivos específicos
@@ -397,6 +435,40 @@ internal class Program
                 Console.WriteLine($"   📄 Archivo final: {finalName}");
             }
         }
+    }
+
+    // EJEMPLO 9: Solo archivos específicos en tiempo especifico
+    private static async Task Example9_OrganizeByDateFolder(FileUtilityService fileUtility)
+    {
+        Console.WriteLine("\n🧪 EJEMPLO 1: Solo archivos específicos");
+        Console.WriteLine("📋 Copiará ÚNICAMENTE: Prueba1.xlsx y Prueba2.xlsx");
+
+        var task = new FileCopyTask
+        {
+            Name = "Solo Archivos Específicos Con tiempo Especificos",
+            SourcePath = @"C:\FileUtilityTest\Source"
+        }
+        .AddDestination(@"C:\FileUtilityTest\Destination\Specific")
+        .AddSpecificFiles("Prueba1.xlsx", "Prueba2.xlsx")
+        .OrganizeByDateFolder("yyyy-MM-dd_HH-mm")
+        .OverwriteIfNewer()
+        .Enable();
+
+        //Directory.CreateDirectory(@"C:\FileUtilityTest\Destination\Specific");
+
+        var schedule = new ScheduleConfiguration()
+                .Daily()
+                .AddExecutionTime(22, 38)
+                .AddExecutionTime(22, 39)
+                .OnWeekdays()
+                .Enable();
+
+        var taskId = await fileUtility.CreateTaskAsync(task, schedule);
+        Console.WriteLine($"✅ Tarea creada: {task.Name}");
+
+        // Ejecutar inmediatamente para ver resultado
+        var result = await fileUtility.ExecuteTaskNowAsync(taskId);
+        Console.WriteLine($"📊 Resultado: {result.Status}, Archivos: {result.SuccessfulFiles}/{result.TotalFiles}");
     }
 
     private static async Task ShowFiles()

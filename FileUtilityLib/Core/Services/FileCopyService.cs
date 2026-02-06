@@ -83,7 +83,26 @@ namespace FileUtilityLib.Core.Services
 
                     foreach (var destPath in task.DestinationPaths)
                     {
-                        var destFile = Path.Combine(destPath, fileName);
+                        var finalDestPath = destPath;
+
+                        if (task.OrganizeByDate)
+                        {
+                            var dateFolder = DateTime.Now.ToString(task.DateFolderFormat);
+                            finalDestPath = Path.Combine(destPath, dateFolder);
+
+                            // Crear directorio de fecha si no existe
+                            try
+                            {
+                                Directory.CreateDirectory(finalDestPath);
+                                _logger.LogDebug("📁 Carpeta de fecha creada: {DateFolder}", dateFolder);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Error creando carpeta de fecha: {DateFolder}", dateFolder);
+                            }
+                        }
+
+                        var destFile = Path.Combine(finalDestPath, fileName);
                         var fileResult = new FileOperationResult
                         {
                             FilePath = sourceFile,
@@ -113,7 +132,7 @@ namespace FileUtilityLib.Core.Services
                             var finalDestFile = shouldCopy.FinalDestinationPath ?? destFile;
                             fileResult.DestinationPath = finalDestFile;
 
-                            await CopyFileAsync(sourceFile, destFile, cancellationToken);
+                            await CopyFileAsync(sourceFile, finalDestFile, cancellationToken);
 
                             fileResult.Success = true;
                             result.SuccessfulFiles++;
